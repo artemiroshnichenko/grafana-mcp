@@ -20,8 +20,23 @@ except ImportError:  # SDK 1.x
 
 from client import GrafanaClient, GrafanaError
 
-API = GrafanaClient()
 mcp = MCPServer("grafana")
+
+_API: GrafanaClient | None = None
+
+
+class _Api:
+    """Builds the client on first use, so a missing GRAFANA_MCP_URL surfaces as a tool error
+    rather than killing the server at import time, where MCP hosts show no message."""
+
+    def __getattr__(self, name: str):
+        global _API
+        if _API is None:
+            _API = GrafanaClient()
+        return getattr(_API, name)
+
+
+API = _Api()
 
 
 def guard_write() -> None:
