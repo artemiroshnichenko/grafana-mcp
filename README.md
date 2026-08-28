@@ -42,10 +42,26 @@ Environment variables (a `.env` file next to the code works too):
 
 ## How the cookie is found
 
-`auth.py` reads the session cookie straight out of the local Firefox or Chromium cookie store for
-the host in `GRAFANA_MCP_URL`. Chromium cookies are encrypted with a key kept in the OS keyring
-(GNOME Keyring via `secretstorage`, or KDE Wallet via `kwallet-query`); the key is cached under
-`~/.cache/grafana-mcp` after the first successful read. If neither keyring is reachable, cookies
-stored with Chromium's unencrypted-fallback password still decrypt.
+`auth.py` reads the session cookie straight out of the local browser's cookie store for the host
+in `GRAFANA_MCP_URL`. Firefox and Chromium-family browsers (Chrome, Chromium, Brave, Edge,
+Vivaldi) are supported on Linux, macOS and Windows; Safari is supported on macOS.
 
 Log in to Grafana in the browser once, and the MCP server picks up that session on the next call.
+How the Chromium encryption key is obtained differs per OS:
+
+- **Linux** -- the key is derived from a password held in GNOME Keyring (via `secretstorage`) or
+  KDE Wallet (via `kwallet-query`), cached under `~/.cache/grafana-mcp` after the first read. If
+  neither keyring is reachable, cookies stored with Chromium's unencrypted-fallback password
+  still decrypt.
+- **macOS** -- the password comes from the login Keychain (`security find-generic-password`);
+  the first lookup may prompt an "Allow access" dialog for the item.
+- **Windows** -- the key is DPAPI-unwrapped from each browser's own `Local State` file. Chrome
+  127+'s App-Bound Encryption (cookie prefix `v20`) wraps that key a second time through Chrome's
+  elevation service, which isn't implemented here -- those specific cookies are skipped rather
+  than failing the whole lookup, so upgrading past that point may mean the session cookie is no
+  longer readable this way.
+- **Safari (macOS)** -- cookies are read from `Cookies.binarycookies`, unencrypted. Reading the
+  sandboxed path may require granting the terminal (or whatever runs the MCP server) Full Disk
+  Access in System Settings. Only cookies with an explicit expiry are persisted to disk by
+  Safari, so a pure session cookie (no `Expires`) won't be there until Grafana sets one that has
+  one.
